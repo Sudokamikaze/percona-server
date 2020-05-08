@@ -179,7 +179,7 @@ Pre-Depends: percona-server-common-5.7 (= ${binary:Version}),
 Depends: percona-server-client-5.7 (= ${binary:Version}),
          ${shlibs:Depends}, ${misc:Depends},
          psmisc,
-         openssl
+         openssl, libssl (>= 1.0)
 Provides: mysql-server,
           virtual-mysql-server, virtual-mysql-server-core,
           mysql-server-5.7, mysql-server-core-5.7
