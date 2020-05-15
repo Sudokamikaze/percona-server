@@ -55,7 +55,7 @@
 %{!?with_systemd:                %global systemd 0}
 %{?el7:                          %global systemd 1}
 %{?el8:                          %global systemd 1}
-%{!?with_debuginfo:              %global nodebuginfo 0}
+%{!?with_debuginfo:              %global nodebuginfo 1}
 %{!?product_suffix:              %global product_suffix -57}
 %{!?feature_set:                 %global feature_set community}
 %{!?compilation_comment_release: %global compilation_comment_release Percona Server (GPL), Release %{percona_server_version}, Revision %{revision}}
