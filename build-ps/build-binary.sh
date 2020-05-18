@@ -254,7 +254,7 @@ fi
         -DWITH_EMBEDDED_SERVER=OFF \
         -DFEATURE_SET=community \
         -DENABLE_DTRACE=OFF \
-        -DWITH_SSL="$WITH_SSL_TYPE" \
+        -DWITH_SSL="/lib/x86_64-linux-gnu/" \
         -DWITH_ZLIB=system \
         -DCMAKE_INSTALL_PREFIX="/usr/local/$PRODUCT_FULL" \
         -DMYSQL_DATADIR="/usr/local/$PRODUCT_FULL/data" \
