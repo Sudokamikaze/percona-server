@@ -116,7 +116,7 @@
 --- libmysql/CMakeLists.txt	2018-08-18 03:30:19.520515918 -0400
 +++ libmysql/CMakeLists.txt	2018-08-18 03:30:19.525932667 -0400
 @@ -244,13 +244,13 @@
- MESSAGE(STATUS "Creating LDAP authentication SASL client library.")
+ # LDAP authentication SASL client plugin
  ADD_SUBDIRECTORY(authentication_ldap)
    
 -# Merge several convenience libraries into one big perconaserverclient
