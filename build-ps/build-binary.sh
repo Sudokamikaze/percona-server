@@ -333,11 +333,11 @@ fi
             echo "Checking LD_RUNPATH for $elf"
             if [[ -z $(patchelf --print-rpath $elf) ]]; then
                 echo "Changing RUNPATH for $elf"
-                patchelf --set-rpath $r_path $elf
+                patchelf --page-size 4096 --set-rpath $r_path $elf
             fi
             if [[ ! -z $override ]] && [[ $override == "true" ]]; then
                 echo "Overriding RUNPATH for $elf"
-                patchelf --set-rpath $r_path $elf
+                patchelf --page-size 4096 --set-rpath $r_path $elf
             fi
         done
     }
@@ -359,6 +359,8 @@ fi
         done
     }
 
+
+    source /opt/rh/devtoolset-9/enable
     # Gather libs
     for DIR in $DIRLIST; do
         gather_libs $DIR

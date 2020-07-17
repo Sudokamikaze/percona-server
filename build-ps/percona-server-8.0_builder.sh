@@ -293,6 +293,7 @@ install_deps() {
             done
             yum -y install  gcc-c++ devtoolset-8-gcc-c++ devtoolset-8-binutils devtoolset-8-gcc devtoolset-8-gcc-c++
             yum -y install ccache devtoolset-8-libasan-devel devtoolset-8-libubsan-devel devtoolset-8-valgrind devtoolset-8-valgrind-devel
+            yum --enablerepo=centos-sclo-rh-testing -y install devtoolset-9-binutils
             yum -y install libasan libicu-devel libtool libzstd-devel lz4-devel make pkg-config
             yum -y install re2-devel redhat-lsb-core lz4-static
             source /opt/rh/devtoolset-8/enable
