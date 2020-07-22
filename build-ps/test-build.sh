@@ -1,61 +1,75 @@
 #!/bin/bash
 
 function check_libs {
-    for elf in $(find $1 -maxdepth 1 -exec file {} \; | grep 'ELF ' | cut -d':' -f1); do
-        echo $elf
-        ldd $elf | grep "not found"
+    local elf_path=$1
+
+    for elf in $(find $elf_path -maxdepth 1 -exec file {} \; | grep 'ELF ' | cut -d':' -f1); do
+        echo "$elf"
+        ldd "$elf"
     done
     return
 }
 
 function prepare {
     CURDIR=$(pwd)
+    TMP_DIR="$CURDIR/temp"
 
-    mkdir -p $CURDIR/temp
-    TMP_DIR=$CURDIR/temp
-    
+    mkdir -p "$CURDIR"/temp
+    mkdir -p "$TMP_DIR"/dbdeployer/tarball "$TMP_DIR"/dbdeployer/deployment
+
     TARBALL=$(basename $(find . -name "*glibc2.12.tar.gz" | sort))
+    DIRLIST="bin lib lib/private lib/plugin lib/mysqlrouter/plugin lib/mysqlrouter/private"
 }
 
 function install_deps {
     if [ -f /etc/redhat-release ]; then 
-        yum install -y perl-Time-HiRes perl numactl numactl-libs libaio libidn || true
+        yum install -y wget perl-Time-HiRes perl numactl numactl-libs libaio libidn || true
     else
-        apt install -y perl numactl libaio-dev libidn11 || true
+        apt install -y wget perl numactl libaio-dev libidn11 || true
     fi
+    wget -c https://github.com/datacharmer/dbdeployer/releases/download/v1.52.0/dbdeployer-1.52.0.linux.tar.gz -O - | tar -xz
+    mv dbdeployer*.linux /usr/local/bin/dbdeployer
+    export PATH=$PATH:/usr/local/bin
 }
 
 main () {
-
-    DIRLIST="bin lib lib/private lib/plugin lib/mysqlrouter/plugin lib/mysqlrouter/private"
-
     prepare
 
     echo "Unpacking tarball"
-    cd $TMP_DIR
-    tar xf $CURDIR/$TARBALL
-    cd ${TARBALL%.tar.gz}
+    cd "$TMP_DIR"
+    tar xf "$CURDIR/$TARBALL"
+    cd "${TARBALL%.tar.gz}"
 
     echo "Checking ELFs for not found"
     for DIR in $DIRLIST; do
-        check_libs $DIR | tee -a $TMP_DIR/libs_err.log
+        check_libs "$DIR" >> "$TMP_DIR"/libs_err.log
     done
 
-    if [[ ! -z $(cat $TMP_DIR/libs_err.log | grep "not found") ]]; then
+    if [[ ! -z "$(cat $TMP_DIR/libs_err.log | grep "not found")" ]]; then
         echo "ERROR: There are missing libraries: "
-        cat $TMP_DIR/libs_err.log
+        cat "$TMP_DIR"/libs_err.log | grep "not found"
         exit 1
     fi
 
-    # Run MTRs
-    cd mysql-test
-    MTR_BUILD_THREAD=auto ./mtr \
-            --force \
-            --max-test-fail=0 \
-            main.1st 
-    MTR_BUILD_THREAD=auto ./mtr \
-            --force \
-            --suite=auth_sec
+    echo "Checking ELFs for any other error"
+    for DIR in $DIRLIST; do
+        if ! check_libs "$DIR"; then
+            exit 1
+        fi
+    done
+
+    echo "Invoking dbdeployer to make a test run"
+    dbdeployer unpack --sandbox-binary="$TMP_DIR"/dbdeployer/tarball --prefix=ps "$CURDIR/$TARBALL"
+    dbdeployer deploy single --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$(ls $TMP_DIR/dbdeployer/tarball)"
+    if [[ $? -eq 0 ]]; then
+        SANDBOX="$(dbdeployer sandboxes --sandbox-home=$TMP_DIR/dbdeployer/deployment | awk '{print $1}')"
+        if ! "$TMP_DIR"/dbdeployer/deployment/"$SANDBOX"/test_sb; then
+            exit 1
+        else
+            dbdeployer delete --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$SANDBOX"
+        fi
+    fi
+
 }
 
 case "$1" in
