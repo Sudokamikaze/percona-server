@@ -38,7 +38,6 @@ function install_deps {
 
 main () {
     prepare
-
     for tarfile in $TARBALLS; do
         echo "Unpacking tarball: $tarfile"
         cd "$TMP_DIR"
@@ -68,7 +67,7 @@ main () {
         done
 
         echo "Invoking dbdeployer to make a test run"
-        dbdeployer unpack --sandbox-binary="$TMP_DIR"/dbdeployer/tarball --prefix=ps "$CURDIR/$TARBALL"
+        dbdeployer unpack --sandbox-binary="$TMP_DIR"/dbdeployer/tarball --prefix=ps "$CURDIR/$tarfile"
         dbdeployer deploy single --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$(ls $TMP_DIR/dbdeployer/tarball)"
         if [[ $? -eq 0 ]]; then
             SANDBOX="$(dbdeployer sandboxes --sandbox-home=$TMP_DIR/dbdeployer/deployment | awk '{print $1}')"
@@ -76,6 +75,7 @@ main () {
                 exit 1
             else
                 dbdeployer delete --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$SANDBOX"
+                dbdeployer delete-binaries --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$(ls $TMP_DIR/dbdeployer/tarball)"
             fi
         fi
         rm -rf "${TMP_DIR:?}/*"
