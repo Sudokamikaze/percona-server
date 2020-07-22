@@ -17,7 +17,11 @@ function prepare {
     mkdir -p "$CURDIR"/temp
     mkdir -p "$TMP_DIR"/dbdeployer/tarball "$TMP_DIR"/dbdeployer/deployment
 
-    TARBALL=$(basename $(find . -name "*glibc2.12.tar.gz" | sort))
+    TARBALLS=""
+    for tarball in $(find . -name "*.tar.gz"); do
+        TARBALLS+=" $(basename $tarball)"
+    done
+
     DIRLIST="bin lib lib/private lib/plugin lib/mysqlrouter/plugin lib/mysqlrouter/private"
 }
 
@@ -35,41 +39,47 @@ function install_deps {
 main () {
     prepare
 
-    echo "Unpacking tarball"
-    cd "$TMP_DIR"
-    tar xf "$CURDIR/$TARBALL"
-    cd "${TARBALL%.tar.gz}"
-
-    echo "Checking ELFs for not found"
-    for DIR in $DIRLIST; do
-        check_libs "$DIR" >> "$TMP_DIR"/libs_err.log
-    done
-
-    if [[ ! -z "$(cat $TMP_DIR/libs_err.log | grep "not found")" ]]; then
-        echo "ERROR: There are missing libraries: "
-        cat "$TMP_DIR"/libs_err.log | grep "not found"
-        exit 1
-    fi
-
-    echo "Checking ELFs for any other error"
-    for DIR in $DIRLIST; do
-        if ! check_libs "$DIR"; then
-            exit 1
-        fi
-    done
-
-    echo "Invoking dbdeployer to make a test run"
-    dbdeployer unpack --sandbox-binary="$TMP_DIR"/dbdeployer/tarball --prefix=ps "$CURDIR/$TARBALL"
-    dbdeployer deploy single --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$(ls $TMP_DIR/dbdeployer/tarball)"
-    if [[ $? -eq 0 ]]; then
-        SANDBOX="$(dbdeployer sandboxes --sandbox-home=$TMP_DIR/dbdeployer/deployment | awk '{print $1}')"
-        if ! "$TMP_DIR"/dbdeployer/deployment/"$SANDBOX"/test_sb; then
-            exit 1
+    for tarfile in $TARBALLS; do
+        echo "Unpacking tarball: $tarfile"
+        cd "$TMP_DIR"
+        tar xf "$CURDIR/$tarfile"
+        if [[ "$tarfile" == *minimal* ]]; then
+            cd "${tarfile%-minimal.tar.gz}"
         else
-            dbdeployer delete --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$SANDBOX"
+            cd "${tarfile%.tar.gz}"
         fi
-    fi
 
+        echo "Checking ELFs for not found"
+        for DIR in $DIRLIST; do
+            check_libs "$DIR" >> "$TMP_DIR"/libs_err.log
+        done
+
+        if [[ ! -z "$(grep \"not found\" $TMP_DIR/libs_err.log)" ]]; then
+            echo "ERROR: There are missing libraries: "
+            grep "not found" "$TMP_DIR"/libs_err.log
+            exit 1
+        fi
+
+        echo "Checking ELFs for any other error"
+        for DIR in $DIRLIST; do
+            if ! check_libs "$DIR"; then
+                exit 1
+            fi
+        done
+
+        echo "Invoking dbdeployer to make a test run"
+        dbdeployer unpack --sandbox-binary="$TMP_DIR"/dbdeployer/tarball --prefix=ps "$CURDIR/$TARBALL"
+        dbdeployer deploy single --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$(ls $TMP_DIR/dbdeployer/tarball)"
+        if [[ $? -eq 0 ]]; then
+            SANDBOX="$(dbdeployer sandboxes --sandbox-home=$TMP_DIR/dbdeployer/deployment | awk '{print $1}')"
+            if ! "$TMP_DIR"/dbdeployer/deployment/"$SANDBOX"/test_sb; then
+                exit 1
+            else
+                dbdeployer delete --sandbox-home="$TMP_DIR"/dbdeployer/deployment --sandbox-binary="$TMP_DIR"/dbdeployer/tarball "$SANDBOX"
+            fi
+        fi
+        rm -rf "${TMP_DIR:?}/*"
+    done
 }
 
 case "$1" in
