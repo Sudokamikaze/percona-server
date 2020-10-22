@@ -255,7 +255,7 @@ fi
         -DWITH_PAM=ON \
         -DWITH_ROCKSDB=ON \
         -DWITH_INNODB_MEMCACHED=ON \
-        -DWITH_ZLIB=system \
+        -DWITH_ZLIB=bundled \
         -DWITH_NUMA=ON \
         -DWITH_LDAP=system \
         -DDOWNLOAD_BOOST=1 \
