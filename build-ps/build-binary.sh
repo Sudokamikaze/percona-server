@@ -409,13 +409,13 @@ fi
 
     # NORMAL TARBALL
     cd "$INSTALLDIR/usr/local/$PRODUCT_FULL"
-    link
+#    link
 
     # MIN TARBALL
     cd "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
     rm -rf mysql-test 2> /dev/null
     find . -type f -exec file '{}' \; | grep ': ELF ' | cut -d':' -f1 | xargs strip --strip-unneeded
-    link
+#    link
 )
 
 # Package the archive
