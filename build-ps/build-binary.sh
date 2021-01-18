@@ -56,7 +56,8 @@ do
         shift
         CMAKE_BUILD_TYPE='Debug'
         BUILD_COMMENT="${BUILD_COMMENT:-}-debug"
-        DEBUG_EXTRA="-DDEBUG_EXTNAME=OFF"
+        TARBALL_SUFFIX="-debug"
+        DEBUG_EXTRA="-DDEBUG_EXTNAME=OFF -DWITH_DEBUG=ON"
         ;;
     -v | --valgrind )
         shift
@@ -163,7 +164,7 @@ else
     REVISION=""
 fi
 PRODUCT_FULL="Percona-Server-$MYSQL_VERSION-$PERCONA_SERVER_VERSION"
-PRODUCT_FULL="$PRODUCT_FULL${BUILD_COMMENT:-}-$TAG$(uname -s)${DIST_NAME:-}.$TARGET${GLIBC_VER:-}"
+PRODUCT_FULL="$PRODUCT_FULL-$TAG$(uname -s)${DIST_NAME:-}.$TARGET${GLIBC_VER:-}${TARBALL_SUFFIX:-}"
 COMMENT="Percona Server (GPL), Release ${MYSQL_VERSION_EXTRA#-}"
 COMMENT="$COMMENT, Revision $REVISION${BUILD_COMMENT:-}"
 
@@ -196,23 +197,6 @@ then
     then
         CMAKE_OPTS="${CMAKE_OPTS:-} -DUSE_VALGRIND=ON"
     fi
-fi
-
-#
-# Attempt to remove any optimisation flags from the debug build
-# BLD-238 - bug1408232
-if [ -n "$(which rpm)" ]; then
-  export COMMON_FLAGS=$(rpm --eval %optflags | sed -e "s|march=i386|march=i686|g")
-  if test "x$CMAKE_BUILD_TYPE" = "xDebug"
-  then
-    COMMON_FLAGS=`echo " ${COMMON_FLAGS} " | \
-              sed -e 's/ -O[0-9]* / /' \
-                  -e 's/-Wp,-D_FORTIFY_SOURCE=2/ /' \
-                  -e 's/ -unroll2 / /' \
-                  -e 's/ -ip / /' \
-                  -e 's/^ //' \
-                  -e 's/ $//'`
-  fi
 fi
 #
 export COMMON_FLAGS="$COMMON_FLAGS -DPERCONA_INNODB_VERSION=$PERCONA_SERVER_VERSION"
@@ -294,7 +278,6 @@ fi
     DIRLIST="bin lib lib/private lib/plugin lib/mysqlrouter/plugin lib/mysqlrouter/private"
 
     LIBPATH=""
-    OVERRIDE=false
 
     function gather_libs {
         local elf_path=$1
@@ -335,13 +318,13 @@ fi
         # Set proper runpath for bins but check before doing anything
         local elf_path=$1
         local r_path=$2
+        local mode=$3
         for elf in $(find ${elf_path} -maxdepth 1 -exec file {} \; | grep 'ELF ' | cut -d':' -f1); do
             echo "Checking LD_RUNPATH for ${elf}"
             if [[ -z $(patchelf --print-rpath ${elf}) ]]; then
                 echo "Changing RUNPATH for ${elf}"
                 patchelf --set-rpath ${r_path} ${elf}
-            fi
-            if [[ ! -z "${override}" ]] && [[ "${override}" == "true" ]]; then
+            elif [[ ! -z ${mode} ]] && [[ ${mode} == "override" ]]; then
                 echo "Overriding RUNPATH for ${elf}"
                 patchelf --set-rpath ${r_path} ${elf}
             fi
@@ -381,19 +364,23 @@ fi
             gather_libs ${DIR}
         done
         # Set proper runpath
-        export override=false
         set_runpath bin '$ORIGIN/../lib/private/'
-        set_runpath lib '$ORIGIN/private/'
-        set_runpath lib/plugin '$ORIGIN/../private/'
+        if [[ ${CMAKE_BUILD_TYPE} == "Debug" ]]; then
+            set_runpath lib '$ORIGIN/private/' override
+            set_runpath lib/plugin '$ORIGIN/../private/' override
+        else
+            set_runpath lib '$ORIGIN/private/'
+            set_runpath lib/plugin '$ORIGIN/../private/'
+        fi
         set_runpath lib/private '$ORIGIN'
         # LIBS MYSQLROUTER
-        unset override && export override=true && set_runpath lib/mysqlrouter/plugin '$ORIGIN/:$ORIGIN/../private/:$ORIGIN/../../private/'
-        unset override && export override=true && set_runpath lib/mysqlrouter/private '$ORIGIN/:$ORIGIN/../plugin/:$ORIGIN/../../private/'
+        set_runpath lib/mysqlrouter/plugin '$ORIGIN/:$ORIGIN/../private/:$ORIGIN/../../private/' override
+        set_runpath lib/mysqlrouter/private '$ORIGIN/:$ORIGIN/../plugin/:$ORIGIN/../../private/' override
         #  BINS MYSQLROUTER
-        unset override && export override=true && set_runpath bin/mysqlrouter_passwd '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/'
-        unset override && export override=true && set_runpath bin/mysqlrouter_plugin_info '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/'
-        unset override && export override=true && set_runpath bin/mysqlrouter '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/'
-        unset override && export override=true && set_runpath bin/mysqlrouter_keyring '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/'
+        set_runpath bin/mysqlrouter_passwd '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/' override
+        set_runpath bin/mysqlrouter_plugin_info '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/' override
+        set_runpath bin/mysqlrouter '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/' override
+        set_runpath bin/mysqlrouter_keyring '$ORIGIN/../lib/mysqlrouter/private/:$ORIGIN/../lib/mysqlrouter/plugin/:$ORIGIN/../lib/private/' override
         # Replace libs
         for DIR in ${DIRLIST}; do
             replace_libs ${DIR}
@@ -404,18 +391,22 @@ fi
         done
     }
 
-    mkdir $INSTALLDIR/usr/local/minimal
-    cp -r "$INSTALLDIR/usr/local/$PRODUCT_FULL" "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
+    if [[ $CMAKE_BUILD_TYPE != "Debug" ]]; then
+        mkdir $INSTALLDIR/usr/local/minimal
+        cp -r "$INSTALLDIR/usr/local/$PRODUCT_FULL" "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
+    fi
 
     # NORMAL TARBALL
     cd "$INSTALLDIR/usr/local/$PRODUCT_FULL"
     link
 
     # MIN TARBALL
-    cd "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
-    rm -rf mysql-test 2> /dev/null
-    find . -type f -exec file '{}' \; | grep ': ELF ' | cut -d':' -f1 | xargs strip --strip-unneeded
-    link
+    if [[ $CMAKE_BUILD_TYPE != "Debug" ]]; then
+        cd "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
+        rm -rf mysql-test 2> /dev/null
+        find . -type f -exec file '{}' \; | grep ': ELF ' | cut -d':' -f1 | xargs strip --strip-unneeded
+        link
+    fi
 )
 
 # Package the archive
@@ -425,9 +416,11 @@ fi
     find $PRODUCT_FULL -type f -name 'COPYING.AGPLv3' -delete
     $TAR --owner=0 --group=0 -czf "$WORKDIR_ABS/$PRODUCT_FULL.tar.gz" $PRODUCT_FULL
 
-    cd "$INSTALLDIR/usr/local/minimal/"
-    find $PRODUCT_FULL-minimal -type f -name 'COPYING.AGPLv3' -delete
-    $TAR --owner=0 --group=0 -czf "$WORKDIR_ABS/$PRODUCT_FULL-minimal.tar.gz" $PRODUCT_FULL-minimal
+    if [[ $CMAKE_BUILD_TYPE != "Debug" ]]; then
+        cd "$INSTALLDIR/usr/local/minimal/"
+        find $PRODUCT_FULL-minimal -type f -name 'COPYING.AGPLv3' -delete
+        $TAR --owner=0 --group=0 -czf "$WORKDIR_ABS/$PRODUCT_FULL-minimal.tar.gz" $PRODUCT_FULL-minimal
+    fi
 )
 
 # Clean up
