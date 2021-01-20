@@ -29,6 +29,8 @@ CMAKE_BUILD_TYPE=''
 COMMON_FLAGS=''
 #
 TOKUDB_BACKUP_VERSION=''
+# enable asan
+ENABLE_ASAN=0
 #
 # Some programs that may be overriden
 TAR=${TAR:-tar}
@@ -57,7 +59,11 @@ do
         CMAKE_BUILD_TYPE='Debug'
         BUILD_COMMENT="${BUILD_COMMENT:-}-debug"
         TARBALL_SUFFIX="-debug"
-        DEBUG_EXTRA="-DDEBUG_EXTNAME=OFF"
+        DEBUG_EXTRA="-DDEBUG_EXTNAME=OFF -DWITH_DEBUG=ON"
+        ;;
+    -a | --asan )
+        shift
+        ENABLE_ASAN=1
         ;;
     -v | --valgrind )
         shift
@@ -173,12 +179,14 @@ export CC=${CC:-gcc}
 export CXX=${CXX:-g++}
 
 # If gcc >= 4.8 we can use ASAN in debug build but not if valgrind build also
-if [[ "$CMAKE_BUILD_TYPE" == "Debug" ]] && [[ "${CMAKE_OPTS:-}" != *WITH_VALGRIND=ON* ]]; then
-  GCC_VERSION=$(${CC} -dumpversion)
-  GT_VERSION=$(echo -e "4.8.0\n${GCC_VERSION}" | sort -t. -k1,1nr -k2,2nr -k3,3nr | head -1)
-  if [ "${GT_VERSION}" = "${GCC_VERSION}" ]; then
-    DEBUG_EXTRA="${DEBUG_EXTRA} -DWITH_ASAN=ON"
-  fi
+if [[ $ENABLE_ASAN -eq 1 ]]; then
+    if [[ "$CMAKE_BUILD_TYPE" == "Debug" ]] && [[ "${CMAKE_OPTS:-}" != *WITH_VALGRIND=ON* ]]; then
+        GCC_VERSION=$(${CC} -dumpversion)
+        GT_VERSION=$(echo -e "4.8.0\n${GCC_VERSION}" | sort -t. -k1,1nr -k2,2nr -k3,3nr | head -1)
+        if [ "${GT_VERSION}" = "${GCC_VERSION}" ]; then
+            DEBUG_EXTRA="${DEBUG_EXTRA} -DWITH_ASAN=ON"
+        fi
+    fi
 fi
 
 # TokuDB cmake flags

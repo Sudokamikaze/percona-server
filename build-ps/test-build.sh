@@ -29,14 +29,8 @@ function install_deps {
     if [ -f /etc/redhat-release ]; then
         yum install -y epel-release
         yum install -y wget perl-Time-HiRes perl numactl numactl-libs libaio libidn libcurl-devel || true
-        if [[ "$(rpm --eval %rhel)" -lt 8 ]]; then
-            yum install -y centos-release-scl-rh
-            yum install -y libasan5 || true
-        else
-            yum install -y libasan || true
-        fi
     else
-        apt install -y wget perl numactl libaio-dev libidn11 libcurl4-openssl-dev libasan5 || true
+        apt install -y wget perl numactl libaio-dev libidn11 libcurl4-openssl-dev || true
     fi
     wget -c https://github.com/datacharmer/dbdeployer/releases/download/v1.52.0/dbdeployer-1.52.0.linux.tar.gz -O - | tar -xz
     mv dbdeployer*.linux /usr/local/bin/dbdeployer
