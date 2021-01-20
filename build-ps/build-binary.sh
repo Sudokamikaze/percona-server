@@ -398,7 +398,7 @@ fi
 
     # NORMAL TARBALL
     cd "$INSTALLDIR/usr/local/$PRODUCT_FULL"
-    link
+#    link
 
     # MIN TARBALL
     if [[ $CMAKE_BUILD_TYPE != "Debug" ]]; then
